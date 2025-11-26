@@ -14,18 +14,10 @@ import os
 # ==========================================
 st.set_page_config(page_title="Simulador de Fornos", layout="wide", page_icon="🏭")
 
-# --- Barra Lateral ---
+# --- Barra Lateral (Configurações) ---
 with st.sidebar:
     st.header("Configurações")
     
-    # Imagem do Forno
-    if os.path.exists("fea_anglo.png"):
-        image = Image.open("fea_anglo.png")
-        st.image(image, caption="Esquema do Forno Elétrico", use_column_width=True)
-    else:
-        st.warning("⚠️ Imagem 'fea_anglo.png' não encontrada no repositório.")
-
-    st.divider()
     st.subheader("1. Dados")
     uploaded_file = st.sidebar.file_uploader("Carregar 'Base_anglo.csv'", type=["csv"])
     
@@ -39,7 +31,21 @@ with st.sidebar:
         st.cache_resource.clear()
 
 # ==========================================
-# 2. CLASSES E FUNÇÕES (BACKEND)
+# 2. TÍTULO E IMAGEM PRINCIPAL
+# ==========================================
+st.title("🏭 Sistema Inteligente de Predição de Fornos")
+
+# Exibe a imagem centralizada logo abaixo do título
+if os.path.exists("fea_anglo.png"):
+    image = Image.open("fea_anglo.png")
+    # Cria 3 colunas para centralizar a imagem se ela for muito pequena, 
+    # ou usa use_container_width para ocupar a largura
+    st.image(image, caption="Esquemático do Forno Elétrico a Arco", use_container_width=True)
+else:
+    st.warning("⚠️ Imagem 'fea_anglo.png' não encontrada no diretório.")
+
+# ==========================================
+# 3. CLASSES E FUNÇÕES (BACKEND)
 # ==========================================
 class Filtros:
     def nao_numerico(self, df):
@@ -94,9 +100,9 @@ def treinar_modelo_global(df, _max_dep, _n_estim, _n_clusters, cols_in, cols_out
     return kmeans, modelos, indices
 
 # ==========================================
-# 3. PREPARAÇÃO DE DADOS (CARREGAMENTO)
+# 4. PREPARAÇÃO DE DADOS (CARREGAMENTO)
 # ==========================================
-# Definição das colunas baseadas na estrutura da sua base (39 entradas + 9 saídas)
+# Definição das colunas baseadas na estrutura da sua base
 cols_in_padrao = [f"Var_Processo_{i}" for i in range(1, 40)]
 cols_out_padrao = ["Temp_Zona_1", "Temp_Zona_2", "Temp_Zona_3", "Temp_Escoria", 
                    "Gas_CO", "Gas_CO2", "Gas_H2", "Gas_O2", "Pressao_Interna"]
@@ -118,11 +124,10 @@ else:
         df = f.nao_numerico(df)
         df = f.nao_negativo(df)
         
-        # Tenta inferir as colunas pela posição (39 primeiras são entrada, resto saída)
+        # Tenta inferir as colunas pela posição
         cols_in = df.columns[:39].tolist()
         cols_out = df.columns[39:].tolist() 
         
-        # Se não tiver saídas suficientes na detecção, usa as últimas 9
         if len(cols_out) < 1:
              cols_out = df.columns[-9:].tolist()
              cols_in = df.columns[:-9].tolist()
@@ -132,19 +137,17 @@ else:
         st.error(f"Erro ao ler CSV: {e}")
         st.stop()
 
-# Título Principal
-st.title("🏭 Sistema Inteligente de Predição de Fornos")
-
 # ==========================================
-# 4. ABAS DA APLICAÇÃO
+# 5. ABAS DA APLICAÇÃO
 # ==========================================
+st.divider()
 tab_hist, tab_manual, tab_val = st.tabs([
     "📋 Histórico (Real vs Previsto)", 
     "🎛️ Simulador Manual (Otimização)", 
     "📈 Validação & Gráficos"
 ])
 
-# --- TREINAMENTO GLOBAL (Executado uma vez) ---
+# --- TREINAMENTO GLOBAL ---
 with st.spinner("Processando inteligência..."):
     kmeans_global, modelos_global, labels_global = treinar_modelo_global(
         df, max_dep, n_estim, n_cl, cols_in, cols_out
@@ -153,13 +156,12 @@ with st.spinner("Processando inteligência..."):
 # --- ABA 1: HISTÓRICO (COMPARAÇÃO COM MAPE) ---
 with tab_hist:
     st.subheader("Auditoria de Dados Históricos")
-    st.markdown("Selecione uma linha do passado para comparar o Real com o Previsto pela IA.")
+    st.markdown("Selecione uma linha do passado para comparar o Real com o Previsto.")
     
     c1, c2 = st.columns([1, 2])
     
     with c1:
         idx = st.number_input("Selecione o índice da linha:", 0, len(df)-1, 0)
-        # Mostra os dados de entrada dessa linha (Read Only)
         st.caption("Parâmetros de Entrada Reais:")
         st.dataframe(df.iloc[idx][cols_in].to_frame().T, hide_index=True)
         
@@ -167,13 +169,9 @@ with tab_hist:
 
     with c2:
         if btn_check:
-            # Pega entrada
             entrada_real = df.iloc[idx][cols_in].to_frame().T
-            
-            # Pega saida real
             saida_real = df.iloc[idx][cols_out].values
             
-            # IA Prevê
             cluster = kmeans_global.predict(entrada_real)[0]
             st.info(f"Regime Operacional: **Cluster {cluster}**")
             
@@ -183,14 +181,12 @@ with tab_hist:
                     val = modelos_global[cluster][out].predict(entrada_real)[0]
                     saida_prevista.append(val)
                 
-                # --- CÁLCULO DO ERRO PERCENTUAL (MAPE) ---
-                # Evita divisão por zero
+                # Cálculo do Erro Percentual
                 saida_real_safe = np.array(saida_real)
                 saida_real_safe[saida_real_safe == 0] = 0.0001 
                 
                 erro_percentual = np.abs((saida_real_safe - np.array(saida_prevista)) / saida_real_safe) * 100
 
-                # Monta Tabela Comparativa
                 df_comp = pd.DataFrame({
                     "Variável": cols_out,
                     "Valor Real": saida_real,
@@ -198,7 +194,6 @@ with tab_hist:
                     "Erro (%)": erro_percentual
                 })
                 
-                # Formatação condicional
                 st.dataframe(
                     df_comp.style.format({
                         "Valor Real": "{:.2f}", 
@@ -209,25 +204,21 @@ with tab_hist:
                     hide_index=True
                 )
                 
-                # Média do erro
                 st.metric("MAPE Médio desta linha", f"{np.mean(erro_percentual):.2f}%")
-                
             else:
                 st.warning("Cluster sem dados suficientes.")
 
 # --- ABA 2: SIMULADOR MANUAL (PLAYGROUND) ---
 with tab_manual:
-    st.subheader("Simulador de Cenários (Otimização)")
+    st.subheader("Simulador de Cenários")
     st.markdown("Altere os parâmetros de entrada abaixo para prever o comportamento do forno.")
     
     col_man_L, col_man_R = st.columns([1, 1])
     
     with col_man_L:
         st.write("**Ajuste os 39 Parâmetros de Entrada:**")
-        # Inicializa com a média para facilitar
         input_medio = df[cols_in].mean().to_frame().T
         
-        # Tabela editável
         user_input = st.data_editor(
             input_medio,
             height=500,
@@ -250,7 +241,6 @@ with tab_manual:
                     val = modelos_global[cluster_man][out].predict(user_input)[0]
                     preds_man.append(val)
                 
-                # Exibe Resultados
                 df_res_man = pd.DataFrame({
                     "Variável de Saída": cols_out,
                     "Previsão": preds_man
@@ -268,7 +258,7 @@ with tab_manual:
 
 # --- ABA 3: VALIDAÇÃO (GRÁFICOS) ---
 with tab_val:
-    st.subheader("Análise de Acurácia (Testes)")
+    st.subheader("Análise de Acurácia")
     
     c_val1, c_val2 = st.columns(2)
     with c_val1:
@@ -277,24 +267,20 @@ with tab_val:
         cluster_analise = st.selectbox("Filtrar por Cluster:", sorted(list(set(labels_global))))
 
     if st.button("Gerar Gráfico de Validação"):
-        with st.spinner("Processando divisão treino/teste..."):
-            # Filtra
+        with st.spinner("Processando validação..."):
             df_temp = df.copy()
             df_temp['K'] = labels_global
             df_cluster = df_temp[df_temp['K'] == cluster_analise]
             
             if len(df_cluster) > 10:
-                # Split
                 X = df_cluster[cols_in]
                 y = df_cluster[var_alvo]
                 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
                 
-                # Treina modelo exclusivo para validação
                 regr_val = AdaBoostRegressor(DecisionTreeRegressor(max_depth=max_dep), n_estimators=n_estim)
                 regr_val.fit(X_train, y_train)
                 y_pred_val = regr_val.predict(X_test)
                 
-                # Métricas
                 mape = np.mean(np.abs((y_test - y_pred_val) / y_test)) * 100
                 
                 st.metric("Erro Médio (MAPE)", f"{mape:.2f}%")
