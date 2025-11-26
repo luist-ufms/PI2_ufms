@@ -24,8 +24,8 @@ with st.sidebar:
     st.divider()
     st.subheader("2. Hiperparâmetros IA")
     n_cl = st.slider("Número de Clusters", 2, 6, 3)
-    max_dep = st.slider("Profundidade Árvore", 2, 20, 10)
-    n_estim = st.slider("Estimadores AdaBoost", 10, 100, 30)
+    max_dep = st.slider("Profundidade Árvore", 2, 20, 5)
+    n_estim = st.slider("Estimadores AdaBoost", 10, 50, 10)
     
     if st.button("🔄 Re-treinar Modelos"):
         st.cache_resource.clear()
