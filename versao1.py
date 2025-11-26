@@ -295,18 +295,3 @@
 #             else:
 #                 st.error("Dados insuficientes neste cluster.")
 
-# --- Célula 4: Rodar com Cloudflare (Mais estável) ---
-import sys
-
-# 1. Baixa a ferramenta do Cloudflare (silenciosamente)
-!wget -q -O cloudflared-linux-amd64 https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-!chmod +x cloudflared-linux-amd64
-
-# 2. Roda o Streamlit em background
-print("Iniciando Streamlit...")
-!streamlit run app.py &>/dev/null &
-
-# 3. Cria o túnel e exibe o link
-print("Gerando link público (aguarde 5 segundos)...")
-import time; time.sleep(5)
-!./cloudflared-linux-amd64 tunnel --url http://localhost:8501
