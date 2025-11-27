@@ -148,26 +148,48 @@ else:
         st.error(f"Erro ao ler CSV: {e}")
         st.stop()
 
-# ==========================================
-# 5. ABAS DA APLICAÇÃO
-# ==========================================
-st.divider()
-tab_hist, tab_manual, tab_val = st.tabs([
-    "🎛️ Simulador Manual Operacional", 
-    "📈 Validação & Gráficos",
-    "📋 Real vs Previsto (Cada linha)",
-])
+# --- ABA 2: VALIDAÇÃO (GRÁFICOS) ---
+with tab_val:
+    st.subheader("Análise de Acurácia (Testes)")
+    
+    c_val1, c_val2 = st.columns(2)
+    with c_val1:
+        var_alvo = st.selectbox("Variável para Analisar:", cols_out)
+    with c_val2:
+        cluster_analise = st.selectbox("Filtrar por Cluster:", sorted(list(set(labels_global))))
 
-# --- TREINAMENTO GLOBAL ---
-with st.spinner("Processando inteligência..."):
-    kmeans_global, modelos_global, labels_global = treinar_modelo_global(
-        df, max_dep, n_estim, n_cl, cols_in, cols_out
-    )
+    if st.button("Gerar Gráfico de Validação"):
+        with st.spinner("Processando divisão treino/teste..."):
+            # Filtra
+            df_temp = df.copy()
+            df_temp['K'] = labels_global
+            df_cluster = df_temp[df_temp['K'] == cluster_analise]
+            
+            if len(df_cluster) > 10:
+                # Split (Divisão Original)
+                X = df_cluster[cols_in]
+                y = df_cluster[var_alvo]
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+                
+                # Treina modelo exclusivo para validação
+                regr_val = AdaBoostRegressor(DecisionTreeRegressor(max_depth=max_dep), n_estimators=n_estim)
+                regr_val.fit(X_train, y_train)
+                y_pred_val = regr_val.predict(X_test)
+                
+                # Métricas
+                # Tratamento para evitar divisão por zero no MAPE
+                y_test_safe = y_test.replace(0, 0.0001)
+                mape = np.mean(np.abs((y_test - y_pred_val) / y_test_safe)) * 100
+                
+                st.metric("Erro Médio (MAPE)", f"{mape:.2f}%")
+                st.pyplot(plot_comparacao_st(var_alvo, y_test.values, y_pred_val, 100))
+            else:
+                st.error("Dados insuficientes neste cluster.")
 
-# --- ABA 1: HISTÓRICO (COMPARAÇÃO COM MAPE) ---
+# --- ABA 3: HISTÓRICO (REAL VS PREVISTO) ---
 with tab_hist:
     st.subheader("Auditoria de Dados Históricos")
-    st.markdown("Selecione uma linha do passado para comparar o Real com o Previsto.")
+    st.markdown("Selecione uma linha do passado para comparar o Real com o Previsto pela IA.")
     
     c1, c2 = st.columns([1, 2])
     
@@ -176,7 +198,7 @@ with tab_hist:
         st.caption("Parâmetros de Entrada Reais:")
         st.dataframe(df.iloc[idx][cols_in].to_frame().T, hide_index=True)
         
-        btn_check = st.button("🔍 Calcular Erro", type="primary")
+        btn_check = st.button("🔍 Calcular Erro da Linha", type="primary")
 
     with c2:
         if btn_check:
@@ -192,7 +214,7 @@ with tab_hist:
                     val = modelos_global[cluster][out].predict(entrada_real)[0]
                     saida_prevista.append(val)
                 
-                # Cálculo do Erro Percentual
+                # Cálculo do Erro Percentual (MAPE da Linha)
                 saida_real_safe = np.array(saida_real)
                 saida_real_safe[saida_real_safe == 0] = 0.0001 
                 
@@ -205,6 +227,7 @@ with tab_hist:
                     "Erro (%)": erro_percentual
                 })
                 
+                # Tabela de Comparação Formatada
                 st.dataframe(
                     df_comp.style.format({
                         "Valor Real": "{:.2f}", 
@@ -216,85 +239,6 @@ with tab_hist:
                 )
                 
                 st.metric("MAPE Médio desta linha", f"{np.mean(erro_percentual):.2f}%")
+                
             else:
                 st.warning("Cluster sem dados suficientes.")
-
-# --- ABA 2: SIMULADOR MANUAL (PLAYGROUND) ---
-with tab_manual:
-    st.subheader("Simulador de Cenários")
-    st.markdown("Altere os parâmetros de entrada abaixo para prever o comportamento do forno.")
-    
-    col_man_L, col_man_R = st.columns([1, 1])
-    
-    with col_man_L:
-        st.write("**Ajuste os 39 Parâmetros de Entrada:**")
-        input_medio = df[cols_in].mean().to_frame().T
-        
-        user_input = st.data_editor(
-            input_medio,
-            height=500,
-            use_container_width=True,
-            hide_index=True,
-            key="editor_manual"
-        )
-        
-        btn_sim_manual = st.button("🚀 Simular Cenário", type="primary", use_container_width=True)
-
-    with col_man_R:
-        st.write("**Saídas Previstas:**")
-        if btn_sim_manual:
-            cluster_man = kmeans_global.predict(user_input)[0]
-            st.success(f"Regime Previsto: **Cluster {cluster_man}**")
-            
-            if cluster_man in modelos_global:
-                preds_man = []
-                for out in cols_out:
-                    val = modelos_global[cluster_man][out].predict(user_input)[0]
-                    preds_man.append(val)
-                
-                df_res_man = pd.DataFrame({
-                    "Variável de Saída": cols_out,
-                    "Previsão": preds_man
-                })
-                
-                st.dataframe(
-                    df_res_man.style.format({"Previsão": "{:.2f}"}).background_gradient(cmap="Blues", subset=["Previsão"]),
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.error("Cluster fora da faixa de operação conhecida.")
-        else:
-            st.info("👈 Edite a tabela e clique em Simular.")
-
-# --- ABA 3: VALIDAÇÃO (GRÁFICOS) ---
-with tab_val:
-    st.subheader("Análise de Acurácia")
-    
-    c_val1, c_val2 = st.columns(2)
-    with c_val1:
-        var_alvo = st.selectbox("Variável para Analisar:", cols_out)
-    with c_val2:
-        cluster_analise = st.selectbox("Filtrar por Cluster:", sorted(list(set(labels_global))))
-
-    if st.button("Gerar Gráfico de Validação"):
-        with st.spinner("Processando validação..."):
-            df_temp = df.copy()
-            df_temp['K'] = labels_global
-            df_cluster = df_temp[df_temp['K'] == cluster_analise]
-            
-            if len(df_cluster) > 10:
-                X = df_cluster[cols_in]
-                y = df_cluster[var_alvo]
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-                
-                regr_val = AdaBoostRegressor(DecisionTreeRegressor(max_depth=max_dep), n_estimators=n_estim)
-                regr_val.fit(X_train, y_train)
-                y_pred_val = regr_val.predict(X_test)
-                
-                mape = np.mean(np.abs((y_test - y_pred_val) / y_test)) * 100
-                
-                st.metric("Erro Médio (MAPE)", f"{mape:.2f}%")
-                st.pyplot(plot_comparacao_st(var_alvo, y_test.values, y_pred_val, 100))
-            else:
-                st.error("Dados insuficientes neste cluster.")
