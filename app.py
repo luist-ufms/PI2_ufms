@@ -19,7 +19,7 @@ with st.sidebar:
     st.header("Configurações")
     
     st.subheader("1. Dados")
-    uploaded_file = st.sidebar.file_uploader("Carregar 'Base_anglo.csv'", type=["csv"])
+    uploaded_file = st.sidebar.file_uploader("Carregar Base'", type=["csv"])
     
     # Opção para ativar ou desativar o filtro de outliers
     usar_quartis = st.checkbox("Remover Outliers", value=True, help="Remove dados muito fora da curva (IQR)")
