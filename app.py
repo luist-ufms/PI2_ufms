@@ -54,7 +54,7 @@ if os.path.exists("fea_anglo.png"):
         st.image(image, use_container_width=True)
     
 else:
-    st.warning("⚠️ Imagem 'fea_anglo.png' não encontrada no diretório.")
+    st.warning("⚠️ Imagem não encontrada no diretório.")
 
 # ==========================================
 # 3. CLASSES E FUNÇÕES (BACKEND)
@@ -115,9 +115,8 @@ def treinar_modelo_global(df, _max_dep, _n_estim, _n_clusters, cols_in, cols_out
 # 4. PREPARAÇÃO DE DADOS (CARREGAMENTO)
 # ==========================================
 # Definição das colunas baseadas na estrutura da sua base
-cols_in_padrao = [f"Var_Processo_{i}" for i in range(1, 40)]
-cols_out_padrao = ["Temp_Zona_1", "Temp_Zona_2", "Temp_Zona_3", "Temp_Escoria", 
-                   "Gas_CO", "Gas_CO2", "Gas_H2", "Gas_O2", "Pressao_Interna"]
+cols_in_padrao = [f"input_{i}" for i in range(1, 40)]
+cols_out_padrao = [f"output_{i}" for i in range(1, 10)]
 
 if uploaded_file is None:
     # Gerar dados aleatórios com a estrutura correta
