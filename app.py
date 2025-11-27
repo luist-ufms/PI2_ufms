@@ -10,22 +10,22 @@ from PIL import Image
 import os
 
 # ==========================================
-# 1. CONFIGURAÇÃO DA PÁGINA
+# 1. CONFIGURAÇÃO DA PÁGINA E SIDEBAR
 # ==========================================
-st.set_page_config(page_title="Simulador Forno Elétrico a Arco", layout="wide", page_icon="🏭")
+st.set_page_config(page_title="Simulador de Fornos", layout="wide", page_icon="🏭")
 
-# --- Barra Lateral (Configurações) ---
+# --- Barra Lateral ---
 with st.sidebar:
     st.header("Configurações")
     
     st.subheader("1. Dados")
-    uploaded_file = st.sidebar.file_uploader("Carregar base'", type=["csv"])
+    uploaded_file = st.sidebar.file_uploader("Carregar 'Base_anglo.csv'", type=["csv"])
     
     st.divider()
     st.subheader("2. Hiperparâmetros IA")
     n_cl = st.slider("Número de Clusters", 2, 6, 3)
-    max_dep = st.slider("Profundidade Árvore", 2, 20, 5)
-    n_estim = st.slider("Estimadores AdaBoost", 10, 60, 30)
+    max_dep = st.slider("Profundidade Árvore", 2, 20, 10)
+    n_estim = st.slider("Estimadores AdaBoost", 10, 100, 30)
     
     if st.button("🔄 Re-treinar Modelos"):
         st.cache_resource.clear()
@@ -33,28 +33,19 @@ with st.sidebar:
 # ==========================================
 # 2. TÍTULO E IMAGEM PRINCIPAL
 # ==========================================
-st.title("Modelo Simulador Operacional Forno Elétrico a Arco")
+st.title("🏭 Sistema Inteligente de Predição de Fornos")
 
+# Exibe a imagem centralizada logo abaixo do título
 if os.path.exists("fea_anglo.png"):
     image = Image.open("fea_anglo.png")
-    
-    # Colunas para centralizar imagem
+    # Colunas para centralizar e ajustar largura (aprox 75%)
     col_img, col_vazia = st.columns([3, 1])
-    
     with col_img:
-        # Legenda da imagem
-        st.markdown(
-            """
-            <div style="text-align: center; font-size: 24px; font-weight: bold; margin-bottom: 10px; color: #333;">
-                Esquemático do Forno Elétrico a Arco
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        st.image(image, use_container_width=True)
-    
+        st.image(image, caption="Esquemático do Forno Elétrico a Arco", use_container_width=True)
 else:
-    st.warning("⚠️ Imagem não encontrada no diretório.")
+    st.warning("⚠️ Imagem 'fea_anglo.png' não encontrada no diretório.")
+
+st.divider()
 
 # ==========================================
 # 3. CLASSES E FUNÇÕES (BACKEND)
@@ -114,17 +105,17 @@ def treinar_modelo_global(df, _max_dep, _n_estim, _n_clusters, cols_in, cols_out
 # ==========================================
 # 4. PREPARAÇÃO DE DADOS (CARREGAMENTO)
 # ==========================================
-# Definição das colunas baseadas na estrutura da sua base
-cols_in_padrao = [f"input_{i}" for i in range(1, 40)]
-cols_out_padrao = [f"output_{i}" for i in range(1, 10)]
+# Definição dos nomes genéricos solicitados (input_x e output_x)
+cols_in_padrao = [f"input_{i}" for i in range(1, 40)]   # 39 Inputs
+cols_out_padrao = [f"output_{i}" for i in range(1, 10)] # 9 Outputs
 
 if uploaded_file is None:
-    # Gerar dados aleatórios com a estrutura correta
+    # Gerar dados aleatórios com a estrutura correta (39 + 9 = 48 colunas)
     total_cols = len(cols_in_padrao) + len(cols_out_padrao)
     df = pd.DataFrame(np.random.rand(200, total_cols) * 100, columns=cols_in_padrao + cols_out_padrao)
     cols_in = cols_in_padrao
     cols_out = cols_out_padrao
-    st.info("ℹ️ Usando dados simulados. Faça upload do CSV para dados reais.")
+    st.info("ℹ️ Usando dados simulados (input_x / output_x). Faça upload do CSV para usar os nomes reais.")
 else:
     try:
         df = pd.read_csv(uploaded_file, sep=';', decimal=',', encoding='latin-1')
@@ -135,7 +126,7 @@ else:
         df = f.nao_numerico(df)
         df = f.nao_negativo(df)
         
-        # Inferindo input e output pela posição
+        # Tenta inferir as colunas pela posição (39 primeiras são entrada, resto saída)
         cols_in = df.columns[:39].tolist()
         cols_out = df.columns[39:].tolist() 
         
@@ -147,6 +138,74 @@ else:
     except Exception as e:
         st.error(f"Erro ao ler CSV: {e}")
         st.stop()
+
+# ==========================================
+# 5. CRIAÇÃO DAS ABAS (O ERRO ESTAVA AQUI)
+# ==========================================
+# Esta linha cria as variáveis que estavam faltando
+tab_manual, tab_val, tab_hist = st.tabs([
+    "🎛️ Simulador Manual Operacional", 
+    "📈 Validação & Gráficos",
+    "📋 Real vs Previsto (Histórico)"
+])
+
+# --- TREINAMENTO GLOBAL (Executado uma vez) ---
+with st.spinner("Processando inteligência artificial..."):
+    kmeans_global, modelos_global, labels_global = treinar_modelo_global(
+        df, max_dep, n_estim, n_cl, cols_in, cols_out
+    )
+
+# --- ABA 1: SIMULADOR MANUAL (PLAYGROUND) ---
+with tab_manual:
+    st.subheader("Simulador de Cenários (Otimização)")
+    st.markdown("Altere os parâmetros de entrada na tabela abaixo para prever o comportamento do forno.")
+    
+    col_man_L, col_man_R = st.columns([1, 1])
+    
+    with col_man_L:
+        st.write("**Ajuste os 39 Parâmetros de Entrada:**")
+        # Inicializa com a média para facilitar
+        input_medio = df[cols_in].mean().to_frame().T
+        
+        # Tabela editável
+        user_input = st.data_editor(
+            input_medio,
+            height=500,
+            use_container_width=True,
+            hide_index=True,
+            key="editor_manual"
+        )
+        
+        btn_sim_manual = st.button("🚀 Simular Cenário", type="primary", use_container_width=True)
+
+    with col_man_R:
+        st.write("**Saídas Previstas:**")
+        if btn_sim_manual:
+            cluster_man = kmeans_global.predict(user_input)[0]
+            st.success(f"Regime Previsto: **Cluster {cluster_man}**")
+            
+            if cluster_man in modelos_global:
+                preds_man = []
+                for out in cols_out:
+                    val = modelos_global[cluster_man][out].predict(user_input)[0]
+                    preds_man.append(val)
+                
+                # Exibe Resultados
+                df_res_man = pd.DataFrame({
+                    "Variável de Saída": cols_out,
+                    "Previsão": preds_man
+                })
+                
+                # CORREÇÃO DE FORMATAÇÃO APLICADA AQUI
+                st.dataframe(
+                    df_res_man.style.format({"Previsão": "{:.2f}"}).background_gradient(cmap="Blues", subset=["Previsão"]),
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.error("Cluster fora da faixa de operação conhecida.")
+        else:
+            st.info("👈 Edite a tabela e clique em Simular.")
 
 # --- ABA 2: VALIDAÇÃO (GRÁFICOS) ---
 with tab_val:
