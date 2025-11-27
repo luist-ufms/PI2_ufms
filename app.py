@@ -12,20 +12,20 @@ import os
 # ==========================================
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ==========================================
-st.set_page_config(page_title="Simulador de Fornos", layout="wide", page_icon="🏭")
+st.set_page_config(page_title="Simulador Forno Elétrico a Arco", layout="wide", page_icon="🏭")
 
 # --- Barra Lateral (Configurações) ---
 with st.sidebar:
     st.header("Configurações")
     
     st.subheader("1. Dados")
-    uploaded_file = st.sidebar.file_uploader("Carregar 'Base_anglo.csv'", type=["csv"])
+    uploaded_file = st.sidebar.file_uploader("Carregar base'", type=["csv"])
     
     st.divider()
     st.subheader("2. Hiperparâmetros IA")
     n_cl = st.slider("Número de Clusters", 2, 6, 3)
     max_dep = st.slider("Profundidade Árvore", 2, 20, 5)
-    n_estim = st.slider("Estimadores AdaBoost", 10, 50, 10)
+    n_estim = st.slider("Estimadores AdaBoost", 10, 60, 30)
     
     if st.button("🔄 Re-treinar Modelos"):
         st.cache_resource.clear()
@@ -33,14 +33,18 @@ with st.sidebar:
 # ==========================================
 # 2. TÍTULO E IMAGEM PRINCIPAL
 # ==========================================
-st.title("🏭 Sistema Inteligente de Predição de Fornos")
+st.title("Modelo Simulador Operacional Forno Elétrico a Arco")
 
-# Exibe a imagem centralizada logo abaixo do título
 if os.path.exists("fea_anglo.png"):
     image = Image.open("fea_anglo.png")
-    # Cria 3 colunas para centralizar a imagem se ela for muito pequena, 
-    # ou usa use_container_width para ocupar a largura
-    st.image(image, caption="Esquemático do Forno Elétrico a Arco", use_container_width=True)
+    
+    # Posicionando a imagem
+    col_img, col_vazia = st.columns([3, 1])
+    
+    with col_img:
+        # A imagem preenche 100% da coluna dela (que é 75% da tela)
+        st.image(image, caption="Esquemático do Forno Elétrico a Arco", use_container_width=True)
+    
 else:
     st.warning("⚠️ Imagem 'fea_anglo.png' não encontrada no diretório.")
 
