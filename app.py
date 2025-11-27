@@ -154,7 +154,7 @@ else:
 st.divider()
 tab_hist, tab_manual, tab_val = st.tabs([
     "🎛️ Simulador Manual Operacional", 
-    "📈 Validação & Gráficos"
+    "📈 Validação & Gráficos",
     "📋 Real vs Previsto (Cada linha)",
 ])
 
