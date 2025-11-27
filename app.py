@@ -41,7 +41,15 @@ if os.path.exists("fea_anglo.png"):
     # Colunas para centralizar e ajustar largura (aprox 75%)
     col_img, col_vazia = st.columns([3, 1])
     with col_img:
-        st.image(image, caption="Esquemático do Forno Elétrico a Arco", use_container_width=True)
+        st.markdown(
+            """
+            <div style="text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 10px; color: #333;">
+                Esquemático do Forno Elétrico a Arco
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        st.image(image, use_container_width=True)
 else:
     st.warning("⚠️ Imagem 'fea_anglo.png' não encontrada no diretório.")
 
@@ -105,12 +113,10 @@ def treinar_modelo_global(df, _max_dep, _n_estim, _n_clusters, cols_in, cols_out
 # ==========================================
 # 4. PREPARAÇÃO DE DADOS (CARREGAMENTO)
 # ==========================================
-# Definição dos nomes genéricos solicitados (input_x e output_x)
-cols_in_padrao = [f"input_{i}" for i in range(1, 40)]   # 39 Inputs
-cols_out_padrao = [f"output_{i}" for i in range(1, 10)] # 9 Outputs
+cols_in_padrao = [f"input_{i}" for i in range(1, 40)]
+cols_out_padrao = [f"output_{i}" for i in range(1, 10)]
 
 if uploaded_file is None:
-    # Gerar dados aleatórios com a estrutura correta (39 + 9 = 48 colunas)
     total_cols = len(cols_in_padrao) + len(cols_out_padrao)
     df = pd.DataFrame(np.random.rand(200, total_cols) * 100, columns=cols_in_padrao + cols_out_padrao)
     cols_in = cols_in_padrao
@@ -126,7 +132,6 @@ else:
         df = f.nao_numerico(df)
         df = f.nao_negativo(df)
         
-        # Tenta inferir as colunas pela posição (39 primeiras são entrada, resto saída)
         cols_in = df.columns[:39].tolist()
         cols_out = df.columns[39:].tolist() 
         
@@ -140,72 +145,70 @@ else:
         st.stop()
 
 # ==========================================
-# 5. CRIAÇÃO DAS ABAS (O ERRO ESTAVA AQUI)
+# 5. ABAS DA APLICAÇÃO (LAYOUT VERTICAL)
 # ==========================================
-# Esta linha cria as variáveis que estavam faltando
 tab_manual, tab_val, tab_hist = st.tabs([
     "🎛️ Simulador Manual Operacional", 
     "📈 Validação & Gráficos",
     "📋 Real vs Previsto (Histórico)"
 ])
 
-# --- TREINAMENTO GLOBAL (Executado uma vez) ---
+# --- TREINAMENTO GLOBAL ---
 with st.spinner("Processando inteligência artificial..."):
     kmeans_global, modelos_global, labels_global = treinar_modelo_global(
         df, max_dep, n_estim, n_cl, cols_in, cols_out
     )
 
-# --- ABA 1: SIMULADOR MANUAL (PLAYGROUND) ---
+# --- ABA 1: SIMULADOR MANUAL (Vertical) ---
 with tab_manual:
     st.subheader("Simulador de Cenários (Otimização)")
-    st.markdown("Altere os parâmetros de entrada na tabela abaixo para prever o comportamento do forno.")
+    st.write("**1. Ajuste os 39 Parâmetros de Entrada na tabela abaixo:**")
     
-    col_man_L, col_man_R = st.columns([1, 1])
+    # Inicializa com a média
+    input_medio = df[cols_in].mean().to_frame().T
     
-    with col_man_L:
-        st.write("**Ajuste os 39 Parâmetros de Entrada:**")
-        # Inicializa com a média para facilitar
-        input_medio = df[cols_in].mean().to_frame().T
-        
-        # Tabela editável
-        user_input = st.data_editor(
-            input_medio,
-            height=500,
-            use_container_width=True,
-            hide_index=True,
-            key="editor_manual"
-        )
-        
-        btn_sim_manual = st.button("🚀 Simular Cenário", type="primary", use_container_width=True)
+    # Tabela editável compacta (sem altura fixa exagerada e sem linhas extras)
+    user_input = st.data_editor(
+        input_medio,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed", # Impede adicionar linhas novas, removendo espaço em branco extra
+        key="editor_manual"
+    )
+    
+    # Botão ocupa toda a largura e fica entre a entrada e a saída
+    st.write("") # Espaçamento
+    btn_sim_manual = st.button("🚀 Simular Cenário", type="primary", use_container_width=True)
+    st.write("") # Espaçamento
 
-    with col_man_R:
-        st.write("**Saídas Previstas:**")
-        if btn_sim_manual:
-            cluster_man = kmeans_global.predict(user_input)[0]
-            st.success(f"Regime Previsto: **Cluster {cluster_man}**")
+    # Área de Resultados (Aparece embaixo após o clique)
+    if btn_sim_manual:
+        st.divider()
+        st.subheader("2. Resultados da Predição")
+        
+        cluster_man = kmeans_global.predict(user_input)[0]
+        st.success(f"Regime Operacional Identificado: **Cluster {cluster_man}**")
+        
+        if cluster_man in modelos_global:
+            preds_man = []
+            for out in cols_out:
+                val = modelos_global[cluster_man][out].predict(user_input)[0]
+                preds_man.append(val)
             
-            if cluster_man in modelos_global:
-                preds_man = []
-                for out in cols_out:
-                    val = modelos_global[cluster_man][out].predict(user_input)[0]
-                    preds_man.append(val)
-                
-                # Exibe Resultados
-                df_res_man = pd.DataFrame({
-                    "Variável de Saída": cols_out,
-                    "Previsão": preds_man
-                })
-                
-                # CORREÇÃO DE FORMATAÇÃO APLICADA AQUI
-                st.dataframe(
-                    df_res_man.style.format({"Previsão": "{:.2f}"}).background_gradient(cmap="Blues", subset=["Previsão"]),
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.error("Cluster fora da faixa de operação conhecida.")
+            # DataFrame de Resultados
+            df_res_man = pd.DataFrame({
+                "Variável de Saída": cols_out,
+                "Previsão": preds_man
+            })
+            
+            # Exibe Tabela com gradiente
+            st.dataframe(
+                df_res_man.style.format({"Previsão": "{:.2f}"}).background_gradient(cmap="Blues", subset=["Previsão"]),
+                use_container_width=True,
+                hide_index=True
+            )
         else:
-            st.info("👈 Edite a tabela e clique em Simular.")
+            st.error("Cluster fora da faixa de operação conhecida. Ajuste os parâmetros.")
 
 # --- ABA 2: VALIDAÇÃO (GRÁFICOS) ---
 with tab_val:
@@ -219,24 +222,20 @@ with tab_val:
 
     if st.button("Gerar Gráfico de Validação"):
         with st.spinner("Processando divisão treino/teste..."):
-            # Filtra
             df_temp = df.copy()
             df_temp['K'] = labels_global
             df_cluster = df_temp[df_temp['K'] == cluster_analise]
             
             if len(df_cluster) > 10:
-                # Split (Divisão Original)
                 X = df_cluster[cols_in]
                 y = df_cluster[var_alvo]
                 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
                 
-                # Treina modelo exclusivo para validação
                 regr_val = AdaBoostRegressor(DecisionTreeRegressor(max_depth=max_dep), n_estimators=n_estim)
                 regr_val.fit(X_train, y_train)
                 y_pred_val = regr_val.predict(X_test)
                 
-                # Métricas
-                # Tratamento para evitar divisão por zero no MAPE
+                # Tratamento para evitar divisão por zero
                 y_test_safe = y_test.replace(0, 0.0001)
                 mape = np.mean(np.abs((y_test - y_pred_val) / y_test_safe)) * 100
                 
@@ -273,7 +272,7 @@ with tab_hist:
                     val = modelos_global[cluster][out].predict(entrada_real)[0]
                     saida_prevista.append(val)
                 
-                # Cálculo do Erro Percentual (MAPE da Linha)
+                # Cálculo do Erro Percentual
                 saida_real_safe = np.array(saida_real)
                 saida_real_safe[saida_real_safe == 0] = 0.0001 
                 
@@ -286,7 +285,6 @@ with tab_hist:
                     "Erro (%)": erro_percentual
                 })
                 
-                # Tabela de Comparação Formatada
                 st.dataframe(
                     df_comp.style.format({
                         "Valor Real": "{:.2f}", 
