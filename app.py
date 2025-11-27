@@ -21,6 +21,9 @@ with st.sidebar:
     st.subheader("1. Dados")
     uploaded_file = st.sidebar.file_uploader("Carregar 'Base_anglo.csv'", type=["csv"])
     
+    # Opção para ativar ou desativar o filtro de Quartis
+    usar_quartis = st.checkbox("Remover Outliers (Quartis)", value=True, help="Remove dados muito fora da curva (IQR)")
+
     st.divider()
     st.subheader("2. Hiperparâmetros IA")
     n_cl = st.slider("Número de Clusters", 2, 6, 3)
@@ -35,15 +38,13 @@ with st.sidebar:
 # ==========================================
 st.title("🏭 Sistema Inteligente de Predição de Fornos")
 
-# Exibe a imagem centralizada logo abaixo do título
 if os.path.exists("fea_anglo.png"):
     image = Image.open("fea_anglo.png")
-    # Colunas para centralizar e ajustar largura (aprox 75%)
     col_img, col_vazia = st.columns([3, 1])
     with col_img:
         st.markdown(
             """
-            <div style="text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 10px; color: #333;">
+            <div style="text-align: center; font-size: 24px; font-weight: bold; margin-bottom: 10px; color: #333;">
                 Esquemático do Forno Elétrico a Arco
             </div>
             """,
@@ -51,7 +52,7 @@ if os.path.exists("fea_anglo.png"):
         )
         st.image(image, use_container_width=True)
 else:
-    st.warning("⚠️ Imagem 'fea_anglo.png' não encontrada no diretório.")
+    st.warning("⚠️ Imagem 'fea_anglo.png' não encontrada.")
 
 st.divider()
 
@@ -61,11 +62,22 @@ st.divider()
 class Filtros:
     def nao_numerico(self, df):
         return df.select_dtypes(include=['number', 'float64', 'int64'])
+    
     def nao_negativo(self, df):
         df = df.copy()
         num_cols = df.select_dtypes(include=['number']).columns
         df[num_cols] = df[num_cols].clip(lower=0)
         return df
+    
+    # --- FUNÇÃO DE QUARTIS REINSERIDA ---
+    def quartiles(self, df):
+        Q1 = df.quantile(0.25)
+        Q3 = df.quantile(0.75)
+        IQR = Q3 - Q1
+        # Filtra mantendo apenas o que está dentro do intervalo interquartil
+        df_filtrado = df[~((df < (Q1 - 1.5 * IQR)) | (df > (Q3 + 1.5 * IQR))).any(axis=1)]
+        return df_filtrado
+
     def clusterizacao(self, n_clusters, df):
         modelo = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
         indices = modelo.fit_predict(df)
@@ -85,7 +97,6 @@ def plot_comparacao_st(nome_variavel, y_real, y_pred, n_plot):
 
 @st.cache_resource
 def treinar_modelo_global(df, _max_dep, _n_estim, _n_clusters, cols_in, cols_out):
-    # Treina com a base completa para uso nos simuladores
     filtro = Filtros()
     indices, kmeans = filtro.clusterizacao(_n_clusters, df[cols_in])
     
@@ -117,11 +128,12 @@ cols_in_padrao = [f"input_{i}" for i in range(1, 40)]
 cols_out_padrao = [f"output_{i}" for i in range(1, 10)]
 
 if uploaded_file is None:
+    # Dados demo
     total_cols = len(cols_in_padrao) + len(cols_out_padrao)
     df = pd.DataFrame(np.random.rand(200, total_cols) * 100, columns=cols_in_padrao + cols_out_padrao)
     cols_in = cols_in_padrao
     cols_out = cols_out_padrao
-    st.info("ℹ️ Usando dados simulados (input_x / output_x). Faça upload do CSV para usar os nomes reais.")
+    st.info("ℹ️ Usando dados simulados.")
 else:
     try:
         df = pd.read_csv(uploaded_file, sep=';', decimal=',', encoding='latin-1')
@@ -132,9 +144,17 @@ else:
         df = f.nao_numerico(df)
         df = f.nao_negativo(df)
         
+        # --- APLICAÇÃO DO FILTRO DE QUARTIS (Se marcado no checkbox) ---
+        if usar_quartis:
+            linhas_antes = len(df)
+            df = f.quartiles(df)
+            linhas_depois = len(df)
+            # Mostra aviso se removeu linhas
+            if linhas_depois < linhas_antes:
+                st.sidebar.info(f"Filtro de Quartis removeu {linhas_antes - linhas_depois} outliers.")
+        
         cols_in = df.columns[:39].tolist()
         cols_out = df.columns[39:].tolist() 
-        
         if len(cols_out) < 1:
              cols_out = df.columns[-9:].tolist()
              cols_in = df.columns[:-9].tolist()
@@ -145,7 +165,7 @@ else:
         st.stop()
 
 # ==========================================
-# 5. ABAS DA APLICAÇÃO (LAYOUT VERTICAL)
+# 5. ABAS DA APLICAÇÃO
 # ==========================================
 tab_manual, tab_val, tab_hist = st.tabs([
     "🎛️ Simulador Manual Operacional", 
@@ -159,29 +179,25 @@ with st.spinner("Processando inteligência artificial..."):
         df, max_dep, n_estim, n_cl, cols_in, cols_out
     )
 
-# --- ABA 1: SIMULADOR MANUAL (Vertical) ---
+# --- ABA 1: SIMULADOR MANUAL ---
 with tab_manual:
     st.subheader("Simulador de Cenários (Otimização)")
     st.write("**1. Ajuste os 39 Parâmetros de Entrada na tabela abaixo:**")
     
-    # Inicializa com a média
     input_medio = df[cols_in].mean().to_frame().T
     
-    # Tabela editável compacta (sem altura fixa exagerada e sem linhas extras)
     user_input = st.data_editor(
         input_medio,
         use_container_width=True,
         hide_index=True,
-        num_rows="fixed", # Impede adicionar linhas novas, removendo espaço em branco extra
+        num_rows="fixed",
         key="editor_manual"
     )
     
-    # Botão ocupa toda a largura e fica entre a entrada e a saída
-    st.write("") # Espaçamento
+    st.write("")
     btn_sim_manual = st.button("🚀 Simular Cenário", type="primary", use_container_width=True)
-    st.write("") # Espaçamento
+    st.write("")
 
-    # Área de Resultados (Aparece embaixo após o clique)
     if btn_sim_manual:
         st.divider()
         st.subheader("2. Resultados da Predição")
@@ -195,22 +211,20 @@ with tab_manual:
                 val = modelos_global[cluster_man][out].predict(user_input)[0]
                 preds_man.append(val)
             
-            # DataFrame de Resultados
             df_res_man = pd.DataFrame({
                 "Variável de Saída": cols_out,
                 "Previsão": preds_man
             })
             
-            # Exibe Tabela com gradiente
             st.dataframe(
                 df_res_man.style.format({"Previsão": "{:.2f}"}).background_gradient(cmap="Blues", subset=["Previsão"]),
                 use_container_width=True,
                 hide_index=True
             )
         else:
-            st.error("Cluster fora da faixa de operação conhecida. Ajuste os parâmetros.")
+            st.error("Cluster fora da faixa de operação conhecida.")
 
-# --- ABA 2: VALIDAÇÃO (GRÁFICOS) ---
+# --- ABA 2: VALIDAÇÃO ---
 with tab_val:
     st.subheader("Análise de Acurácia (Testes)")
     
@@ -235,7 +249,6 @@ with tab_val:
                 regr_val.fit(X_train, y_train)
                 y_pred_val = regr_val.predict(X_test)
                 
-                # Tratamento para evitar divisão por zero
                 y_test_safe = y_test.replace(0, 0.0001)
                 mape = np.mean(np.abs((y_test - y_pred_val) / y_test_safe)) * 100
                 
@@ -244,10 +257,10 @@ with tab_val:
             else:
                 st.error("Dados insuficientes neste cluster.")
 
-# --- ABA 3: HISTÓRICO (REAL VS PREVISTO) ---
+# --- ABA 3: HISTÓRICO ---
 with tab_hist:
     st.subheader("Auditoria de Dados Históricos")
-    st.markdown("Selecione uma linha do passado para comparar o Real com o Previsto pela IA.")
+    st.markdown("Selecione uma linha do passado para comparar o Real com o Previsto.")
     
     c1, c2 = st.columns([1, 2])
     
@@ -272,7 +285,6 @@ with tab_hist:
                     val = modelos_global[cluster][out].predict(entrada_real)[0]
                     saida_prevista.append(val)
                 
-                # Cálculo do Erro Percentual
                 saida_real_safe = np.array(saida_real)
                 saida_real_safe[saida_real_safe == 0] = 0.0001 
                 
@@ -296,6 +308,5 @@ with tab_hist:
                 )
                 
                 st.metric("MAPE Médio desta linha", f"{np.mean(erro_percentual):.2f}%")
-                
             else:
                 st.warning("Cluster sem dados suficientes.")
