@@ -12,7 +12,7 @@ import os
 # ==========================================
 # 1. CONFIGURAÇÃO DA PÁGINA E SIDEBAR
 # ==========================================
-st.set_page_config(page_title="Simulador de Fornos", layout="wide", page_icon="🏭")
+st.set_page_config(page_title="Simulador Forno Elétrico a Arco", layout="wide", page_icon="🏭")
 
 # --- Barra Lateral ---
 with st.sidebar:
@@ -21,8 +21,8 @@ with st.sidebar:
     st.subheader("1. Dados")
     uploaded_file = st.sidebar.file_uploader("Carregar 'Base_anglo.csv'", type=["csv"])
     
-    # Opção para ativar ou desativar o filtro de Quartis
-    usar_quartis = st.checkbox("Remover Outliers (Quartis)", value=True, help="Remove dados muito fora da curva (IQR)")
+    # Opção para ativar ou desativar o filtro de outliers
+    usar_quartis = st.checkbox("Remover Outliers", value=True, help="Remove dados muito fora da curva (IQR)")
 
     st.divider()
     st.subheader("2. Hiperparâmetros IA")
@@ -36,7 +36,7 @@ with st.sidebar:
 # ==========================================
 # 2. TÍTULO E IMAGEM PRINCIPAL
 # ==========================================
-st.title("🏭 Sistema Inteligente de Predição de Fornos")
+st.title("🏭 Sistema de Predição de Temperaturas no FEA")
 
 if os.path.exists("fea_anglo.png"):
     image = Image.open("fea_anglo.png")
@@ -68,8 +68,7 @@ class Filtros:
         num_cols = df.select_dtypes(include=['number']).columns
         df[num_cols] = df[num_cols].clip(lower=0)
         return df
-    
-    # --- FUNÇÃO DE QUARTIS REINSERIDA ---
+        
     def quartiles(self, df):
         Q1 = df.quantile(0.25)
         Q3 = df.quantile(0.75)
@@ -144,7 +143,7 @@ else:
         df = f.nao_numerico(df)
         df = f.nao_negativo(df)
         
-        # --- APLICAÇÃO DO FILTRO DE QUARTIS (Se marcado no checkbox) ---
+        # APLICAÇÃO DO FILTRO DE QUARTIS
         if usar_quartis:
             linhas_antes = len(df)
             df = f.quartiles(df)
@@ -181,7 +180,7 @@ with st.spinner("Processando inteligência artificial..."):
 
 # --- ABA 1: SIMULADOR MANUAL ---
 with tab_manual:
-    st.subheader("Simulador de Cenários (Otimização)")
+    st.subheader("Simulador de Cenários (Operação)")
     st.write("**1. Ajuste os 39 Parâmetros de Entrada na tabela abaixo:**")
     
     input_medio = df[cols_in].mean().to_frame().T
@@ -226,7 +225,7 @@ with tab_manual:
 
 # --- ABA 2: VALIDAÇÃO ---
 with tab_val:
-    st.subheader("Análise de Acurácia (Testes)")
+    st.subheader("Análise de Acurácia")
     
     c_val1, c_val2 = st.columns(2)
     with c_val1:
@@ -259,7 +258,7 @@ with tab_val:
 
 # --- ABA 3: HISTÓRICO ---
 with tab_hist:
-    st.subheader("Auditoria de Dados Históricos")
+    st.subheader("Erro de previsão de dados históricos")
     st.markdown("Selecione uma linha do passado para comparar o Real com o Previsto.")
     
     c1, c2 = st.columns([1, 2])
