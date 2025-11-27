@@ -38,23 +38,20 @@ st.title("Modelo Simulador Operacional Forno Elétrico a Arco")
 if os.path.exists("fea_anglo.png"):
     image = Image.open("fea_anglo.png")
     
-    # --- TRUQUE PARA 75% DA LARGURA ---
+    # Colunas para centralizar imagem
     col_img, col_vazia = st.columns([3, 1])
     
     with col_img:
-        # 1. Exibe a imagem SEM o caption padrão
-        st.image(image, use_container_width=True)
-        
-        # 2. Cria a legenda personalizada usando HTML
-        # Você pode alterar o 'font-size' para 20px, 24px, etc.
+        # Legenda da imagem
         st.markdown(
             """
-            <div style="text-align: center; font-size: 20px; font-weight: bold; margin-top: -10px;">
+            <div style="text-align: center; font-size: 24px; font-weight: bold; margin-bottom: 10px; color: #333;">
                 Esquemático do Forno Elétrico a Arco
             </div>
             """,
             unsafe_allow_html=True
         )
+        st.image(image, use_container_width=True)
     
 else:
     st.warning("⚠️ Imagem 'fea_anglo.png' não encontrada no diretório.")
