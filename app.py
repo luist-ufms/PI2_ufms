@@ -135,7 +135,7 @@ else:
         df = f.nao_numerico(df)
         df = f.nao_negativo(df)
         
-        # Tenta inferir as colunas pela posição
+        # Inferindo input e output pela posição
         cols_in = df.columns[:39].tolist()
         cols_out = df.columns[39:].tolist() 
         
@@ -153,9 +153,9 @@ else:
 # ==========================================
 st.divider()
 tab_hist, tab_manual, tab_val = st.tabs([
-    "📋 Histórico (Real vs Previsto)", 
-    "🎛️ Simulador Manual (Otimização)", 
+    "🎛️ Simulador Manual Operacional", 
     "📈 Validação & Gráficos"
+    "📋 Real vs Previsto (Cada linha)",
 ])
 
 # --- TREINAMENTO GLOBAL ---
